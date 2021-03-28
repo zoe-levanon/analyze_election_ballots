@@ -1,0 +1,29 @@
+{
+  "name": "typescript-lessons-2",
+  "version": "1.0.0",
+  "description": "Typescript Lessons - Part 2",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ozlev/typescript-lessons-2.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ozlev/typescript-lessons-2/issues"
+  },
+  "homepage": "https://github.com/ozlev/typescript-lessons-2#readme",
+  "dependencies": {
+    "@types/node": "^14.14.37",
+    "csv-parse": "^4.15.3",
+    "iconv-lite": "^0.6.2",
+    "typescript": "^4.2.3"
+  },
+  "devDependencies": {
+    "ts-node": "^9.1.1"
+  }
+}
