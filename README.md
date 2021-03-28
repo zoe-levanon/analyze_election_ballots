@@ -1,2 +1,1 @@
-# typescript-lessons-2
-Typescript Lessons - Part 2
+# Analyze Ballot Results
