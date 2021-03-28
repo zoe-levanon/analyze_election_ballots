@@ -125,7 +125,7 @@ export function addVotingData(cur: SingleBallotData, cumulate: CumulativeBallotD
     cumulate.totalVotes += cur.totalVotes;
     cumulate.validVotes += cur.validVotes;
     cumulate.voters += cur.voters;
-    const parties = Object.keys(cumulate.votes).concat(Object.keys(cur.votes));
+    const parties = Object.keys(cur.votes);
     parties.forEach(p => {
         cumulate.votes[p] = (cumulate.votes[p] || 0) + (cur.votes[p] || 0);
     })    
