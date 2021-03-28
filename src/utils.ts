@@ -2,10 +2,15 @@ import * as fs from "fs";
 const parse = require("csv-parse/lib/sync");
 const iconv = require('iconv-lite');
 
-export type BallotData = {
-    municipalityName: string;
-    municipalityId: string;
-    ballotId: string;
+export type ElectionsData = {
+    ballots: Array<SingleBallotData>;
+    byBallot: Record<string, CumulativeBallotData>;
+    byBallotGroup: Record<string, CumulativeBallotData>;
+    byMunicipality: Record<string, CumulativeBallotData>;
+    totals: CumulativeBallotData;
+}
+
+export type VotingData = {
     voters: number;
     totalVotes: number;
     disqualified: number;
@@ -13,12 +18,44 @@ export type BallotData = {
     votes: Record<string, number>;
 }
 
+export type SingleBallotData = VotingData & {
+    municipalityName: string;
+    municipalityId: string;
+    ballotId: string;    
+}
+
+export type CumulativeBallotData = VotingData & {
+    id: string;
+}
+
+export function readElections(file: string): ElectionsData {
+    const ballots = readBallots(file);
+    const byBallot = accumulateBy(ballots, b => `${b.municipalityId}/${b.ballotId}`);
+    const byBallotGroup = accumulateBy(ballots, b => {
+        let ballotId = b.ballotId;
+        let firstPeriod = ballotId.indexOf('.');
+        if (firstPeriod > 0) {
+            ballotId = ballotId.substring(0, firstPeriod);
+        }
+        return `${b.municipalityId}/${ballotId}`;
+    });
+    const byMunicipality = accumulateBy(ballots, b => `${b.municipalityId}`);
+    const totals = accumulateBy(ballots, b => `x`)["x"];
+    return {
+        ballots,
+        byBallot,
+        byBallotGroup,
+        byMunicipality,
+        totals
+    }
+}
+
 /**
  * Read csv data
  * @param file file to read from (either local of s3)
  * @returns array of rows (key=value map) in CSV file
  */
- export function readBallots(file: string): Array<BallotData> {
+ export function readBallots(file: string): Array<SingleBallotData> {
     // Read CSV file as binary
     let buffer = fs.readFileSync(file, {encoding: "binary"});
 
@@ -37,7 +74,7 @@ export type BallotData = {
     return result.map((r: any, index: number) => processLine(r, columnNames));
 }
 
-function processLine(line: string[], columnNames: string[]): BallotData {
+function processLine(line: string[], columnNames: string[]): SingleBallotData {
     let ballotVotes: Record<string, number> = {};
     for (let i = 11 ; i < columnNames.length ; i++) {
         ballotVotes[columnNames[i]] = parseInt(line[i]);
@@ -54,19 +91,42 @@ function processLine(line: string[], columnNames: string[]): BallotData {
     }
 }
 
-export function accumulateBy(ballots: Array<BallotData>, idFunc: (b: BallotData) => string): any {
-    // ballots.reduce(b, index) {
-    //     (b[index[key]] = b[index[key]] || []).push(x);
-    //     return b;
-    //   }, {});
+export function accumulateBy(ballots: Array<SingleBallotData>, idFunc: (b: SingleBallotData) => string): Record<string, CumulativeBallotData> {
+    // Group by ID
+    const byId = ballots.reduce((prev: any, cur: SingleBallotData) => {
+        let id = idFunc(cur);
+        let ballots = prev[id] || [];
+        ballots.push(cur);
+        prev[id] = ballots;
+        return prev;
+    }, {});    
 
-      const red = ballots.reduce((prev: any, cur: BallotData) => {
-          let id = idFunc(cur);
-          let array = prev[id] || [];
-          array.push(cur);        
-          prev[id] = array;
-            return prev;
-      }, {});
+    // Accumulate votes by ID
+    let accumulations: Record<string, CumulativeBallotData> = {};
+    Object.keys(byId).forEach(k =>  {
+        const ballots: Array<SingleBallotData> = byId[k];
+        const cumulate: CumulativeBallotData = {
+            id: k,
+            voters: 0,
+            validVotes: 0,
+            disqualified: 0,
+            totalVotes: 0,
+            votes: {},
+        };
+        ballots.forEach(b => addVotingData(b, cumulate));
+        accumulations[k] = cumulate;
+    })
 
-      return red;
+    return accumulations;
+}
+
+export function addVotingData(cur: SingleBallotData, cumulate: CumulativeBallotData) {        
+    cumulate.disqualified += cur.disqualified;
+    cumulate.totalVotes += cur.totalVotes;
+    cumulate.validVotes += cur.validVotes;
+    cumulate.voters += cur.voters;
+    const parties = Object.keys(cumulate.votes).concat(Object.keys(cur.votes));
+    parties.forEach(p => {
+        cumulate.votes[p] = (cumulate.votes[p] || 0) + (cur.votes[p] || 0);
+    })    
 }
