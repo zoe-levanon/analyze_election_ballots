@@ -1,5 +1,6 @@
 import * as fs from "fs";
 const parse = require("csv-parse/lib/sync");
+const iconv = require('iconv-lite');
 
 export type BallotData = {
     municipalityName: string;
@@ -17,7 +18,7 @@ export type BallotData = {
  * @param file file to read from (either local of s3)
  * @returns array of rows (key=value map) in CSV file
  */
- function readCsv(file: string): Array<any> {
+ export function readBallots(file: string): Array<BallotData> {
     // Read CSV file as binary
     let buffer = fs.readFileSync(file, {encoding: "binary"});
 
@@ -27,17 +28,16 @@ export type BallotData = {
     const sBuffer = Buffer.from(lines.join("\n"), "utf8");
     
     // Parse the CSV
-    let result = parse(sBuffer, {trim: true});
-    let columnNames: string[] = result[0];
+    let result: Array<string[]> = parse(sBuffer, {trim: true});
+    let columnNames: string[] = result.shift()!;
     // Remove empty header columns
     while (columnNames[columnNames.length - 1] === "") {
         columnNames.pop();
     }
-    let item = processLine(result[1], columnNames, 1);
-    return result.map((r: any, index: number) => processLine(r, columnNames, index + 2));
+    return result.map((r: any, index: number) => processLine(r, columnNames));
 }
 
-function processLine(line: string[], columnNames: string[], index: number): BallotData {
+function processLine(line: string[], columnNames: string[]): BallotData {
     let ballotVotes: Record<string, number> = {};
     for (let i = 11 ; i < columnNames.length ; i++) {
         ballotVotes[columnNames[i]] = parseInt(line[i]);
@@ -52,17 +52,21 @@ function processLine(line: string[], columnNames: string[], index: number): Ball
         validVotes: parseInt(line[10]),
         votes: ballotVotes
     }
-    // let rowAsMap = new Map<string, string>();
-    // Object.keys(line).forEach(key => result.set(key.toLowerCase(), line[key]));
-    // result.set("_line", index.toString());
-    // return result;
 }
 
-var iconv = require('iconv-lite');
-const ballots = readCsv(process.argv[2]);
-console.log(ballots[45]);
-// let e1 = iconv.encodingExists("ISO-8859-1");
-// let e2 = iconv.encodingExists("ISO-8859-8");
-// let e3 = iconv.encodingExists("fake-8859-1");
-// console.log(e1, e2, e3);
+export function accumulateBy(ballots: Array<BallotData>, idFunc: (b: BallotData) => string): any {
+    // ballots.reduce(b, index) {
+    //     (b[index[key]] = b[index[key]] || []).push(x);
+    //     return b;
+    //   }, {});
 
+      const red = ballots.reduce((prev: any, cur: BallotData) => {
+          let id = idFunc(cur);
+          let array = prev[id] || [];
+          array.push(cur);        
+          prev[id] = array;
+            return prev;
+      }, {});
+
+      return red;
+}
